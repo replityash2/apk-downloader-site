@@ -8,146 +8,164 @@
         body { font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #0d1117; color: #c9d1d9; }
         .container { background: #161b22; padding: 20px; border-radius: 15px; border: 1px solid #30363d; }
         h2 { text-align: center; color: #58a6ff; }
-        
-        /* Inputs */
+
+        /* Buttons & Inputs */
         input { width: 100%; padding: 12px; margin-bottom: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .btn-upload { background: #238636; color: white; margin-bottom: 15px; }
+        .btn-delete { background: #da3633; color: white; width: auto; padding: 4px 10px; font-size: 0.8em; margin-left: 10px; }
+        .btn-refresh { background: #1f6feb; color: white; margin-bottom: 10px; }
         
-        /* Buttons */
-        button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        .btn-upload { background: #238636; color: white; }
-        .btn-refresh { background: #1f6feb; color: white; margin-bottom: 15px;}
-        .btn-delete { background: #da3633; color: white; width: auto; padding: 5px 12px; font-size: 0.8em; }
-        .btn-login { background: #30363d; color: #c9d1d9; border: 1px solid #8b949e; margin-top: 10px;}
-        
+        /* Secret Login Area */
+        #adminLogin { display: none; margin-top: 20px; border-top: 1px solid #30363d; padding-top: 20px; }
+        .secret-btn { background: none; border: none; color: #30363d; font-size: 1.2em; cursor: pointer; float: right; }
+        .secret-btn:hover { color: #58a6ff; }
+
         /* File List */
-        .file-list { margin-top: 20px; }
-        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #21262d; margin-bottom: 10px; border-radius: 8px; border: 1px solid #30363d; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #21262d; margin-bottom: 8px; border-radius: 8px; border: 1px solid #30363d; }
         .file-name { color: #58a6ff; text-decoration: none; font-weight: bold; word-break: break-all; }
-        .file-info { font-size: 0.8em; color: #8b949e; margin-top: 4px; }
-        
-        /* Visibility Classes */
-        .admin-only { display: none; } /* Hidden by default */
-        .status { text-align: center; margin-top: 10px; font-size: 0.9em; }
+        .admin-controls { display: none; } /* Hidden for guests */
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🚀 APK Share System</h2>
-    
-    <div id="loginSection">
-        <p style="font-size: 0.9em; color: #8b949e;">Enter details to enable Upload Mode. (Your friend doesn't need this).</p>
-        <input type="text" id="username" placeholder="GitHub Username (e.g. yourname)">
-        <input type="text" id="repo" placeholder="Repo Name (e.g. my-apk-storage)">
-        <input type="password" id="token" placeholder="Paste Token to Unlock Admin Mode">
-        <button class="btn-login" onclick="saveCredentials()">Unlock Admin Mode</button>
+    <h2>🚀 Shared Files</h2>
+
+    <div id="uploaderSection" class="admin-controls">
+        <input type="file" id="fileInput">
+        <button class="btn-upload" onclick="uploadFile()">Upload New File</button>
+        <p id="uploadStatus" style="font-size:0.9em; text-align:center;"></p>
+        <hr style="border-color: #30363d;">
     </div>
 
-    <div id="appSection" style="display:none;">
-        <p id="welcomeMsg" style="text-align: center; color: #8b949e;"></p>
-        
-        <div id="adminPanel" class="admin-only">
-            <hr style="border-color: #30363d;">
-            <h3>📤 Upload File</h3>
-            <input type="file" id="fileInput">
-            <button class="btn-upload" onclick="uploadFile()">Upload File</button>
-            <div id="uploadStatus" class="status"></div>
-            <hr style="border-color: #30363d; margin: 20px 0;">
-        </div>
+    <button class="btn-refresh" onclick="listFiles()">Refresh List</button>
+    <div id="fileList"></div>
 
-        <h3>📥 Available Files</h3>
-        <button class="btn-refresh" onclick="listFiles()">Refresh List</button>
-        <div id="fileList" class="file-list"></div>
-        
-        <button class="btn-login" onclick="logout()" style="margin-top: 30px;">Lock / Logout</button>
+    <div style="margin-top: 30px; overflow: auto;">
+        <span id="modeLabel" style="font-size: 0.8em; color: #30363d;">Guest Mode</span>
+        <button class="secret-btn" onclick="toggleLogin()">🔑</button>
+    </div>
+
+    <div id="adminLogin">
+        <p style="font-size: 0.9em;">Enter Token to Enable Uploads:</p>
+        <input type="password" id="tokenInput" placeholder="GitHub Personal Access Token">
+        <button onclick="saveToken()" style="background: #30363d; color: white; border:1px solid #8b949e;">Unlock</button>
     </div>
 </div>
 
 <script>
-    // Configuration
-    let CONFIG = { user: '', repo: '', token: '' };
+    // ==========================================
+    // ⚙️ SETUP: EDIT THESE TWO LINES ONLY!
+    // ==========================================
+    const GITHUB_USERNAME = "replityash2";  
+    const REPO_NAME = "apk-storage"; // Make sure this matches your PUBLIC storage repo name exactly
+    // ==========================================
 
-    // On Load: Check if user is "Admin" (has token saved)
+    let USER_TOKEN = localStorage.getItem('gh_token') || "";
+
+    // On Load
     window.onload = function() {
-        const savedUser = localStorage.getItem('gh_user');
-        const savedRepo = localStorage.getItem('gh_repo');
-        const savedToken = localStorage.getItem('gh_token');
-
-        if (savedUser && savedRepo) {
-            CONFIG.user = savedUser;
-            CONFIG.repo = savedRepo;
-            CONFIG.token = savedToken || ''; // Token might be empty if guest
-            
-            showApp();
+        if (USER_TOKEN) {
+            enableAdminMode();
+        } else {
+            document.getElementById('modeLabel').innerText = "Guest Mode (Read Only)";
         }
+        listFiles();
     };
 
-    function saveCredentials() {
-        const user = document.getElementById('username').value;
-        const repo = document.getElementById('repo').value;
-        const token = document.getElementById('token').value;
-
-        if(!user || !repo) return alert("Username and Repo are required!");
-
-        localStorage.setItem('gh_user', user);
-        localStorage.setItem('gh_repo', repo);
-        if(token) localStorage.setItem('gh_token', token);
-
-        CONFIG = { user, repo, token };
-        showApp();
-    }
-
-    function showApp() {
-        document.getElementById('loginSection').style.display = 'none';
-        document.getElementById('appSection').style.display = 'block';
-        
-        if (CONFIG.token) {
-            // ADMIN MODE
-            document.getElementById('welcomeMsg').innerText = `🔓 Admin Mode: ${CONFIG.user}/${CONFIG.repo}`;
-            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+    function toggleLogin() {
+        const loginDiv = document.getElementById('adminLogin');
+        // If hidden, show it. If showing, hide it.
+        if (loginDiv.style.display === "block") {
+            loginDiv.style.display = "none";
         } else {
-            // GUEST MODE
-            document.getElementById('welcomeMsg').innerText = `👁️ Guest Mode: Viewing ${CONFIG.user}/${CONFIG.repo}`;
+            loginDiv.style.display = "block";
         }
-        
-        listFiles();
     }
 
-    function logout() {
-        localStorage.clear();
-        location.reload();
+    function saveToken() {
+        const token = document.getElementById('tokenInput').value.trim();
+        if (token) {
+            localStorage.setItem('gh_token', token);
+            USER_TOKEN = token;
+            enableAdminMode();
+            alert("Admin Mode Unlocked! 🔓");
+            toggleLogin(); // Hide the box
+            listFiles(); // Refresh to show delete buttons
+        }
+    }
+
+    function enableAdminMode() {
+        document.querySelectorAll('.admin-controls').forEach(el => el.style.display = 'block');
+        document.getElementById('modeLabel').innerText = "✅ Admin Mode Active";
     }
 
     // --- CORE FUNCTIONS ---
 
+    async function listFiles() {
+        const listDiv = document.getElementById('fileList');
+        listDiv.innerHTML = "<p style='text-align:center'>Loading...</p>";
+
+        const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents`;
+        // Note: We don't need a token to LIST files if the repo is Public
+        const headers = USER_TOKEN ? { 'Authorization': `token ${USER_TOKEN}` } : {};
+
+        try {
+            const res = await fetch(url, { headers });
+            if (!res.ok) throw new Error("Repo not found");
+            const data = await res.json();
+            
+            listDiv.innerHTML = "";
+
+            data.forEach(file => {
+                if(file.type === "file") {
+                    // Create Delete Button HTML (Only if Admin)
+                    let deleteHtml = "";
+                    if (USER_TOKEN) {
+                        deleteHtml = `<button class="btn-delete" onclick="deleteFile('${file.path}', '${file.sha}')">Delete</button>`;
+                    }
+
+                    listDiv.innerHTML += `
+                        <div class="file-item">
+                            <a href="${file.download_url}" class="file-name" target="_blank">${file.name}</a>
+                            <div style="display:flex; align-items:center;">
+                                <span style="font-size:0.8em; color:#8b949e; margin-right:10px;">${(file.size/1024/1024).toFixed(2)} MB</span>
+                                ${deleteHtml}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            if (data.length === 0) listDiv.innerHTML = "<p style='text-align:center'>No files found.</p>";
+        } catch (e) {
+            listDiv.innerHTML = `<p style='text-align:center; color:#da3633'>Error: Could not find repo '${REPO_NAME}'</p>`;
+        }
+    }
+
     async function uploadFile() {
         const fileInput = document.getElementById('fileInput');
         const status = document.getElementById('uploadStatus');
-        
-        if (!fileInput.files.length) return alert("Select a file!");
-        
+        if (!fileInput.files.length) return alert("Select a file first");
+
         const file = fileInput.files[0];
-        status.innerText = "⏳ Encoding...";
+        status.innerText = "⏳ Uploading...";
 
         const reader = new FileReader();
         reader.readAsDataURL(file);
-        
         reader.onload = async function() {
             const content = reader.result.split(',')[1];
-            status.innerText = "🚀 Uploading...";
+            const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${file.name}`;
 
-            const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${file.name}`;
-            
             try {
                 const res = await fetch(url, {
                     method: 'PUT',
-                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: "New APK Upload", content: content })
+                    headers: { 'Authorization': `token ${USER_TOKEN}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: "Upload", content: content })
                 });
-
                 if (res.ok) {
                     status.innerText = "✅ Done!";
-                    fileInput.value = ''; // Clear input
+                    fileInput.value = "";
                     listFiles();
                 } else {
                     const err = await res.json();
@@ -157,62 +175,14 @@
         };
     }
 
-    async function listFiles() {
-        const listDiv = document.getElementById('fileList');
-        listDiv.innerHTML = "<p class='status'>Loading...</p>";
-
-        // If no token, we can still list files if the repo is PUBLIC
-        const headers = CONFIG.token ? { 'Authorization': `token ${CONFIG.token}` } : {};
-        const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents`;
-
-        try {
-            const res = await fetch(url, { headers });
-            if (!res.ok) throw new Error("Repo not found or private");
-            const data = await res.json();
-
-            listDiv.innerHTML = ""; 
-            
-            data.forEach(file => {
-                if(file.type === "file") {
-                    let deleteBtn = '';
-                    // Only show delete button if we have a token
-                    if(CONFIG.token) {
-                        deleteBtn = `<button class="btn-delete" onclick="deleteFile('${file.path}', '${file.sha}')">Delete</button>`;
-                    }
-
-                    // Calculate file size (approx)
-                    const size = (file.size / 1024 / 1024).toFixed(2) + " MB";
-
-                    listDiv.innerHTML += `
-                        <div class="file-item">
-                            <div>
-                                <a href="${file.download_url}" class="file-name" target="_blank">${file.name}</a>
-                                <div class="file-info">${size}</div>
-                            </div>
-                            ${deleteBtn}
-                        </div>
-                    `;
-                }
-            });
-            
-            if(data.length === 0) listDiv.innerHTML = "<p class='status'>No files yet.</p>";
-
-        } catch (e) {
-            listDiv.innerHTML = "<p class='status'>❌ Could not load files. Is the repo Public?</p>";
-        }
-    }
-
     async function deleteFile(path, sha) {
         if(!confirm("Delete this file?")) return;
-        
-        const url = `https://api.github.com/repos/${CONFIG.user}/${CONFIG.repo}/contents/${path}`;
-        
+        const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/${path}`;
         await fetch(url, {
             method: 'DELETE',
-            headers: { 'Authorization': `token ${CONFIG.token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: "Delete file", sha: sha })
+            headers: { 'Authorization': `token ${USER_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: "Delete", sha: sha })
         });
-        
         listFiles();
     }
 </script>
